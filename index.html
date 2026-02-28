@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Crypto Snake - Bitcoin Hunter</title>
     <style>
         body {
             display: flex;
             flex-direction: row; 
             align-items: flex-start;
-            justify-content: flex-end;
-            padding-right: 300px;
+            justify-content: center;
+            padding-right: 0;
             background-image: url('ccback.png');
             background-size: cover;
             background-position: center 10%; 
@@ -19,9 +19,49 @@
             color: #ffffff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding-top: 190px; 
-            overflow: hidden;
-            gap: 5px; 
+            padding-top: 50px; 
+            overflow-x: hidden;
+            gap: 20px;
+            touch-action: manipulation; /* Melhora o toque no mobile */
+        }
+
+        /* Desktop Adjustment */
+        @media (min-width: 900px) {
+            body {
+                justify-content: flex-end;
+                padding-right: 300px;
+                padding-top: 190px;
+                gap: 5px;
+            }
+            #mobile-controls { display: none !important; } /* Esconde setas no PC */
+        }
+
+        /* Mobile Adjustment */
+        @media (max-width: 899px) {
+            body {
+                flex-direction: column;
+                align-items: center;
+                padding-top: 20px;
+                overflow-y: auto;
+            }
+
+            canvas {
+                width: 90vw;
+                height: 90vw;
+                max-width: 400px;
+            }
+
+            #scoreBoard {
+                width: 90vw !important;
+                height: auto !important;
+                flex-direction: row !important;
+                justify-content: space-around !important;
+                margin-bottom: 15px;
+            }
+
+            #scoreBoard hr { display: none; }
+            #scoreBoard div { font-size: 12px; }
+            #scoreBoard span { font-size: 16px !important; }
         }
 
         /* Flash Effects */
@@ -29,10 +69,7 @@
         body.flash-blue { background-color: #0000ff !important; background-image: none !important; }
         body.flash-orange { background-color: #f7931a !important; background-image: none !important; }
 
-        #game-container {
-            position: relative;
-            z-index: 2;
-        }
+        #game-container { position: relative; z-index: 2; }
 
         #scoreBoard {
             width: 160px;   
@@ -53,11 +90,37 @@
             line-height: 1.6;
         }
 
-        #scoreBoard span {
-            display: block;
-            font-size: 20px;
-            margin-bottom: 10px;
+        #scoreBoard span { display: block; font-size: 20px; }
+
+        /* Mobile Controls (D-Pad) */
+        #mobile-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(2, 60px);
+            gap: 10px;
+            margin-top: 20px;
+            z-index: 5;
         }
+
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #f7931a;
+            color: #f7931a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            border-radius: 10px;
+            user-select: none;
+        }
+
+        .control-btn:active { background: #f7931a; color: #000; }
+        .up { grid-column: 2; }
+        .left { grid-column: 1; grid-row: 2; }
+        .down { grid-column: 2; grid-row: 2; }
+        .right { grid-column: 3; grid-row: 2; }
 
         @keyframes shake {
             0% { transform: translate(3px, 3px); }
@@ -91,12 +154,13 @@
             border: 3px solid #ff0000;
             border-radius: 5px;
             text-align: center;
-            width: 320px;
+            width: 85vw;
+            max-width: 320px;
             box-shadow: 0 0 100px #000;
             z-index: 10;
         }
 
-        #walletModal h2 { color: #ff0000; margin: 0 0 10px 0; font-size: 28px; font-weight: 900; }
+        #walletModal h2 { color: #ff0000; margin: 0 0 10px 0; font-size: 24px; font-weight: 900; }
         #walletModal input { width: 90%; padding: 12px; margin: 10px 0; background: #111; color: #fff; border: 1px solid #ff0000; text-align: center; }
         .btn { width: 100%; padding: 12px; margin-top: 10px; cursor: pointer; font-weight: bold; text-transform: uppercase; border: none; color: white; }
         .btn-send { background: #f7931a; }
@@ -118,11 +182,18 @@
     </div>
 
     <div id="scoreBoard">
-        <div>₿ITCOINS</div>
+        <div>₿itcoins</div>
         <span id="score">0.00000</span>
         <hr style="width: 80%; border: 0.5px solid #333; margin: 10px 0;">
         <div>👾 BAD AGENTS</div>
         <span id="agentCount" style="color: #ff4444;">0</span>
+    </div>
+
+    <div id="mobile-controls">
+        <div class="control-btn up" onclick="setDir('UP')">▲</div>
+        <div class="control-btn left" onclick="setDir('LEFT')">◀</div>
+        <div class="control-btn down" onclick="setDir('DOWN')">▼</div>
+        <div class="control-btn right" onclick="setDir('RIGHT')">▶</div>
     </div>
 
     <script>
@@ -134,6 +205,7 @@
         
         let snake, food, portal, badAgents, d, game, score, currentSpeed;
 
+        // Keyboard Controls
         window.addEventListener("keydown", e => {
             if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight", " "].indexOf(e.key) > -1) e.preventDefault();
         }, false);
@@ -148,20 +220,25 @@
             else if (key == 40 && d != "UP") d = "DOWN";
         }
 
+        // Mobile Control Function
+        function setDir(newDir) {
+            if (newDir == "LEFT" && d != "RIGHT") d = "LEFT";
+            else if (newDir == "UP" && d != "DOWN") d = "UP";
+            else if (newDir == "RIGHT" && d != "LEFT") d = "RIGHT";
+            else if (newDir == "DOWN" && d != "UP") d = "DOWN";
+        }
+
         function triggerFlash(type, isGameOver) {
             const colors = {
                 'red': { body: 'flash-red', canvas: 'canvas-red-alert' },
                 'blue': { body: 'flash-blue', canvas: 'canvas-blue-alert' },
                 'orange': { body: 'flash-orange', canvas: 'canvas-orange-alert' }
             };
-            
             const effect = colors[type];
             body.classList.add(effect.body);
             canvas.classList.add(effect.canvas);
             container.classList.add("shaking");
-            
             let duration = isGameOver ? 2000 : 200;
-            
             setTimeout(() => {
                 container.classList.remove("shaking");
                 body.classList.remove(effect.body);
@@ -245,9 +322,7 @@
                 spawnFood();
                 badAgents.push({ x: Math.floor(Math.random() * 19 + 1) * box, y: Math.floor(Math.random() * 19 + 1) * box });
                 document.getElementById("agentCount").innerText = badAgents.length;
-                
                 triggerFlash('orange', false);
-                
                 if (score % 5 === 0) spawnPortal();
                 if (currentSpeed > 20) { currentSpeed -= 5; startGameLoop(); }
             } else if (portal && snakeX == portal.x && snakeY == portal.y) {
