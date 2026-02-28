@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Snake - Bitcoin Hunter</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: row; 
+            align-items: flex-start;
+            justify-content: flex-end;
+            padding-right: 300px;
+            background-image: url('ccback.png');
+            background-size: cover;
+            background-position: center 10%; 
+            background-attachment: fixed;
+            background-color: #000;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding-top: 190px; 
+            overflow: hidden;
+            gap: 5px; 
+        }
+
+        /* Flash Effects */
+        body.flash-red { background-color: #ff0000 !important; background-image: none !important; }
+        body.flash-blue { background-color: #0000ff !important; background-image: none !important; }
+        body.flash-orange { background-color: #f7931a !important; background-image: none !important; }
+
+        #game-container {
+            position: relative;
+            z-index: 2;
+        }
+
+        #scoreBoard {
+            width: 160px;   
+            height: 160px;  
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 16px;
+            color: #f7931a;
+            font-weight: bold;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #f7931a;
+            z-index: 2;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+            padding: 10px;
+            line-height: 1.6;
+        }
+
+        #scoreBoard span {
+            display: block;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shake {
+            0% { transform: translate(3px, 3px); }
+            20% { transform: translate(-3px, -3px); }
+            40% { transform: translate(-5px, 0px); }
+            60% { transform: translate(5px, 3px); }
+            80% { transform: translate(-3px, 3px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        .shaking { animation: shake 0.15s infinite; }
+
+        canvas {
+            background-color: #000000;
+            border: 5px solid #333;
+            display: block;
+        }
+
+        .canvas-red-alert { border-color: #ff0000 !important; box-shadow: 0 0 40px #ff0000; }
+        .canvas-blue-alert { border-color: #00aaff !important; box-shadow: 0 0 40px #00aaff; }
+        .canvas-orange-alert { border-color: #f7931a !important; box-shadow: 0 0 40px #f7931a; }
+
+        #walletModal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #000;
+            padding: 25px;
+            border: 3px solid #ff0000;
+            border-radius: 5px;
+            text-align: center;
+            width: 320px;
+            box-shadow: 0 0 100px #000;
+            z-index: 10;
+        }
+
+        #walletModal h2 { color: #ff0000; margin: 0 0 10px 0; font-size: 28px; font-weight: 900; }
+        #walletModal input { width: 90%; padding: 12px; margin: 10px 0; background: #111; color: #fff; border: 1px solid #ff0000; text-align: center; }
+        .btn { width: 100%; padding: 12px; margin-top: 10px; cursor: pointer; font-weight: bold; text-transform: uppercase; border: none; color: white; }
+        .btn-send { background: #f7931a; }
+        .btn-restart { background: #28a745; margin-top: 15px; }
+    </style>
+</head>
+<body id="mainBody">
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        
+        <div id="walletModal">
+            <h2>MARKET CRASH</h2>
+            <p>Profit: <span id="finalScore" style="color:#f7931a; font-weight:bold;">0.00000</span> BTC</p>
+            <input type="text" id="walletAddr" placeholder="Bitcoin Address" autocomplete="off">
+            <button class="btn btn-send" onclick="confirmTransfer()">SEND BITCOINS</button>
+            <button class="btn btn-restart" onclick="init()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <div id="scoreBoard">
+        <div>₿ITCOINS</div>
+        <span id="score">0.00000</span>
+        <hr style="width: 80%; border: 0.5px solid #333; margin: 10px 0;">
+        <div>👾 BAD AGENTS</div>
+        <span id="agentCount" style="color: #ff4444;">0</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const body = document.getElementById("mainBody");
+        const container = document.getElementById("game-container");
+        const box = 20;
+        
+        let snake, food, portal, badAgents, d, game, score, currentSpeed;
+
+        window.addEventListener("keydown", e => {
+            if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight", " "].indexOf(e.key) > -1) e.preventDefault();
+        }, false);
+
+        document.addEventListener("keydown", direction);
+
+        function direction(event) {
+            let key = event.keyCode;
+            if (key == 37 && d != "RIGHT") d = "LEFT";
+            else if (key == 38 && d != "DOWN") d = "UP";
+            else if (key == 39 && d != "LEFT") d = "RIGHT";
+            else if (key == 40 && d != "UP") d = "DOWN";
+        }
+
+        function triggerFlash(type, isGameOver) {
+            const colors = {
+                'red': { body: 'flash-red', canvas: 'canvas-red-alert' },
+                'blue': { body: 'flash-blue', canvas: 'canvas-blue-alert' },
+                'orange': { body: 'flash-orange', canvas: 'canvas-orange-alert' }
+            };
+            
+            const effect = colors[type];
+            body.classList.add(effect.body);
+            canvas.classList.add(effect.canvas);
+            container.classList.add("shaking");
+            
+            let duration = isGameOver ? 2000 : 200;
+            
+            setTimeout(() => {
+                container.classList.remove("shaking");
+                body.classList.remove(effect.body);
+                if (!isGameOver) canvas.classList.remove(effect.canvas);
+            }, duration);
+        }
+
+        function init() {
+            snake = [{ x: 9 * box, y: 10 * box }];
+            score = 0;
+            currentSpeed = 110;
+            d = "RIGHT";
+            badAgents = [];
+            portal = null;
+            updateScoreDisplay();
+            document.getElementById("agentCount").innerText = 0;
+            document.getElementById("walletModal").style.display = "none";
+            canvas.classList.remove("canvas-red-alert", "canvas-blue-alert", "canvas-orange-alert");
+            spawnFood();
+            startGameLoop();
+        }
+
+        function startGameLoop() {
+            if(game) clearInterval(game);
+            game = setInterval(draw, currentSpeed);
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById("score").innerText = (score * 0.00001).toFixed(5);
+        }
+
+        function spawnFood() {
+            food = { x: Math.floor(Math.random() * 19 + 1) * box, y: Math.floor(Math.random() * 19 + 1) * box };
+        }
+
+        function spawnPortal() {
+            portal = { x: Math.floor(Math.random() * 19 + 1) * box, y: Math.floor(Math.random() * 19 + 1) * box };
+        }
+
+        function draw() {
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            snake.forEach((part, i) => {
+                ctx.fillStyle = (i == 0) ? "#00ff00" : "#004400";
+                ctx.fillRect(part.x, part.y, box, box);
+                ctx.strokeRect(part.x, part.y, box, box);
+            });
+
+            ctx.fillStyle = "#f7931a";
+            ctx.font = "bold 18px Arial";
+            ctx.fillText("₿", food.x + 4, food.y + 16);
+
+            ctx.fillStyle = "#ff0000";
+            badAgents.forEach(agent => ctx.fillText("👾", agent.x + 2, agent.y + 16));
+
+            if(portal) {
+                ctx.fillStyle = "#00aaff";
+                ctx.fillText("🌀", portal.x + 2, portal.y + 16);
+            }
+
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+
+            if (d == "LEFT") snakeX -= box;
+            if (d == "UP") snakeY -= box;
+            if (d == "RIGHT") snakeX += box;
+            if (d == "DOWN") snakeY += box;
+
+            let newHead = { x: snakeX, y: snakeY };
+
+            if (snakeX < 0 || snakeX >= canvas.width || snakeY < 0 || snakeY >= canvas.height || 
+                collision(newHead, snake) || collision(newHead, badAgents)) {
+                gameOver();
+                return;
+            }
+
+            if (snakeX == food.x && snakeY == food.y) {
+                score++;
+                updateScoreDisplay();
+                spawnFood();
+                badAgents.push({ x: Math.floor(Math.random() * 19 + 1) * box, y: Math.floor(Math.random() * 19 + 1) * box });
+                document.getElementById("agentCount").innerText = badAgents.length;
+                
+                triggerFlash('orange', false);
+                
+                if (score % 5 === 0) spawnPortal();
+                if (currentSpeed > 20) { currentSpeed -= 5; startGameLoop(); }
+            } else if (portal && snakeX == portal.x && snakeY == portal.y) {
+                badAgents = [];
+                portal = null;
+                document.getElementById("agentCount").innerText = 0;
+                triggerFlash('blue', false);
+            } else {
+                snake.pop();
+            }
+            snake.unshift(newHead);
+        }
+
+        function collision(head, array) {
+            return array.some(part => head.x == part.x && head.y == part.y);
+        }
+
+        function gameOver() {
+            clearInterval(game);
+            triggerFlash('red', true); 
+            document.getElementById("finalScore").innerText = (score * 0.00001).toFixed(5);
+            document.getElementById("walletModal").style.display = "block";
+        }
+
+        function confirmTransfer() {
+            const addr = document.getElementById("walletAddr").value;
+            if(addr.trim().length < 8) return alert("ERROR: Invalid address.");
+            alert("Transfer of " + (score * 0.00001).toFixed(5) + " BTC to: " + addr + "\n\nStatus: Pending");
+            init();
+        }
+
+        init();
+    </script>
+</body>
+</html>
